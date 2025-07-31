@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Lista de Produtos</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <h1>Gerenciar Produtos</h1>
+
+    <button id="btnAdicionar">Adicionar Produto</button>
+
+    <table id="tabelaProdutos">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>Preço</th>
+            <th>Ações</th>
+        </tr>
+        </thead>
+        <tbody>
+        <!-- Produtos inseridos via JavaScript -->
+        </tbody>
+    </table>
+
+    <!-- jQuery e SweetAlert2 -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.all.min.js"></script>
+
+    <script>
+        // Função para carregar produtos da API
+        function carregarProdutos() {
+            $.get('api/list.php', function(produtos) {
+                let linhas = '';
+                produtos.forEach(function(p) {
+                    linhas += `<tr>
+                        <td>${p.id}</td>
+                        <td>${p.nome}</td>
+                        <td>€ ${parseFloat(p.preco).toFixed(2)}</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" onclick='abrirEdicaoSweetAlert(${JSON.stringify(p)})'>Editar</button>
+                            <button class="btn btn-sm btn-danger" onclick='deletarProduto(${p.id})'>Excluir</button>
+                        </td>
+                    </tr>`;
+                });
+                $('#tabelaProdutos tbody').html(linhas);
+            }, 'json');
+        }
+
+
+        // Enviar novo produto via AJAX
+        $('#btnAdicionar').on('click', function () {
+            Swal.fire({
+                title: 'Novo Produto',
+                html:
+                    '<input id="swal-nome" class="swal2-input" placeholder="Nome do produto">' +
+                    '<input id="swal-preco" class="swal2-input" placeholder="Preço" type="number">',
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Salvar',
+                cancelButtonText: 'Cancelar',
+                preConfirm: () => {
+                    const nome = $('#swal-nome').val();
+                    const preco = $('#swal-preco').val();
+
+                    if (!nome || !preco) {
+                        Swal.showValidationMessage('Preencha todos os campos!');
+                        return false;
+                    }
+
+                    // Envia via AJAX
+                    return $.ajax({
+                        type: 'POST',
+                        url: 'api/create.php',
+                        data: { nome, preco },
+                        dataType: 'json'
+                    }).then(response => {
+                        if (!response.success) {
+                            throw new Error(response.message || 'Erro ao adicionar produto.');
+                        }
+                        return response;
+                    }).catch(err => {
+                        Swal.showValidationMessage(err.message);
+                    });
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire('Sucesso!', 'Produto adicionado!', 'success');
+                    carregarProdutos();
+                }
+            });
+        });
+
+
+        // Carregar produtos ao abrir a página
+        carregarProdutos();
+
+
+                // Atualizar item
+        function atualizarProduto(id, name, price) {
+            $.ajax({
+                url: 'api/update.php',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ id, name, price }),
+                success: function(response) {
+                    alert('Produto atualizado com sucesso!');
+                    carregarProdutos(); // atualiza tabela
+                }
+            });
+        }
+
+        // Deletar item
+        function deletarProduto(id) {
+            Swal.fire({
+                title: 'Tem certeza?',
+                text: "Você não poderá desfazer esta ação!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#aaa',
+                confirmButtonText: 'Sim, excluir!',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: 'api/delete.php',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ id }),
+                        success: function(response) {
+                            Swal.fire(
+                                'Excluído!',
+                                'O produto foi removido com sucesso.',
+                                'success'
+                            );
+                            carregarProdutos(); // atualiza a tabela
+                        },
+                        error: function() {
+                            Swal.fire(
+                                'Erro!',
+                                'Não foi possível excluir o produto.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        }
+
+
+        function abrirEdicaoSweetAlert(produto) {
+        Swal.fire({
+            title: 'Editar Produto',
+            html:
+                `<input id="swal-nome" class="swal2-input" placeholder="Nome" value="${produto.nome}">` +
+                `<input id="swal-preco" class="swal2-input" placeholder="Preço" type="number" step="0.01" value="${produto.preco}">`,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Salvar',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const nome = document.getElementById('swal-nome').value.trim();
+                const preco = document.getElementById('swal-preco').value;
+
+                if (!nome || preco === '') {
+                    Swal.showValidationMessage('Todos os campos são obrigatórios.');
+                    return false;
+                }
+
+                return { nome, preco };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Chama API update.php
+                $.ajax({
+                    type: 'POST',
+                    url: 'api/update.php',
+                    data: {
+                        id: produto.id,
+                        nome: result.value.nome,
+                        preco: result.value.preco
+                    },
+                    dataType: 'json',
+                    success: function (res) {
+                        if (res.success) {
+                            Swal.fire('Sucesso', 'Produto atualizado!', 'success');
+                            carregarProdutos();
+                        } else {
+                            Swal.fire('Erro', res.message || 'Falha ao atualizar.', 'error');
+                        }
+                    },
+                    error: function () {
+                        Swal.fire('Erro', 'Erro na comunicação com o servidor.', 'error');
+                    }
+                });
+            }
+        });
+}
+
+
+    </script>
+</body>
+</html>
